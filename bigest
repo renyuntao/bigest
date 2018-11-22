@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+#
+# SYNOPSIS
+#   __file__  /data
+#   __file__
+#
+# DESCRIPTIONS
+#   Find the biggest file/directory under a path
+
+import os
+from os import getcwd
+from sys import argv
+from os.path import exists, join, islink, isdir
+from subprocess import check_output, DEVNULL, CalledProcessError
+from re import match
+
+KILO = 1024;
+UNIT = ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
+
+def scan(dir_):
+	device = os.stat(dir_).st_dev
+	files = dict()
+	size = None
+	
+	if os.path.isdir(dir_):
+		fileIter = os.scandir(dir_)
+	else:
+		return
+
+	for item in fileIter:
+		name = item.name
+		if name == "." or name == "..":
+			continue
+		file_ = join(dir_, name)
+		if not exists(file_) or islink(file_):
+			continue
+		if os.stat(file_).st_dev != device:
+			continue
+		cmd = ['du', '-xsb', file_]
+		try:
+			size = check_output(cmd).decode('utf-8').strip().split()[0]
+		except CalledProcessError:
+			continue
+		if size and not match('^(\d+)', size):
+			continue
+		files[int(size)] = file_
+
+	maxSize = sorted(list(files.keys()), reverse=True)[0]
+	print(" {0:>8}  {1}".format(human(maxSize), files[maxSize]))
+
+	scan(files[maxSize])
+
+def human(size):
+	counter = 0
+	while size >= KILO:
+		size /= KILO
+		counter += 1
+	return "{0:.1f}{1}".format(size, UNIT[counter])
+
+path = argv[1:] if argv[1:] else [getcwd(),]
+for file_ in path:
+	if isdir(file_):
+		scan(file_)
